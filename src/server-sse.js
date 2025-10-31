@@ -4,7 +4,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 
 const app = express();
 
-// Basic request logging
+// Simple request logging (shows up in Render logs)
 app.use((req, _res, next) => {
   console.error(`[req] ${req.method} ${req.url}`);
   next();
@@ -12,32 +12,32 @@ app.use((req, _res, next) => {
 
 app.use(express.json());
 
-// Minimal MCP server with one tool
-const mcp = new McpServer({ name: "hello-mcp-sse", version: "1.0.3" });
+// Minimal MCP server with one test tool
+const mcp = new McpServer({ name: "hello-mcp-sse", version: "1.0.4" });
 mcp.tool("say_hello", {}, async () => {
   return { content: [{ type: "text", text: "Hello from your Render MCP server!" }] };
 });
 
-// Health
+// Health check
 app.get("/", (_req, res) => res.status(200).send("OK"));
 
-// IMPORTANT: handle proxy health probes that use HEAD on /sse
+// Handle proxy health probes that use HEAD on /sse
 app.head("/sse", (_req, res) => {
-  // Respond OK without starting SSE or setting headers twice
   res.status(200).end();
 });
 
 // SSE stream endpoint (server -> client)
-// Let the SDK set the correct SSE headers; do NOT set headers manually.
+// Let the SDK manage the SSE headers.
 app.get("/sse", async (_req, res) => {
   const transport = new SSEServerTransport("/messages", res);
   await mcp.connect(transport);
 });
 
 // Messages endpoint (client -> server)
+// NOTE: Newer SDKs expose handlePost (not handlePostMessage).
 app.post("/messages", async (req, res) => {
   try {
-    await SSEServerTransport.handlePostMessage(req, res);
+    await SSEServerTransport.handlePost(req, res);
   } catch (err) {
     console.error("Message handling error:", err);
     if (!res.headersSent) res.status(500).json({ error: "message handling failed" });
